@@ -133,7 +133,7 @@ fun App(
         MandatoryUpdateController(net::getLatestVersionProfile, appScope, appKoin.getOrNull<AutoUpdater>(),
             appContext.isAndroid(), hasNetworkConnection = appContext::hasNetworkConnection)
     }
-    // Android RWTS uses a separate package and cannot install upstream RWJS updates.
+    // TS localization: Android RWTS cannot install updates for the upstream RWJS package.
     LaunchedEffect(Unit) {
         if (!appContext.isAndroid()) UI.latestVersionProfile = updateController.check()
     }
