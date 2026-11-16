@@ -156,7 +156,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.rwjs"
+        applicationId = "io.github.rwts"
         minSdk = (findProperty("android.minSdk") as String).toInt()
         targetSdk = (findProperty("android.targetSdk") as String).toInt()
         ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64")) }
