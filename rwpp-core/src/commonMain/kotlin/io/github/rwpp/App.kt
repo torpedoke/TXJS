@@ -133,7 +133,10 @@ fun App(
         MandatoryUpdateController(net::getLatestVersionProfile, appScope, appKoin.getOrNull<AutoUpdater>(),
             appContext.isAndroid(), hasNetworkConnection = appContext::hasNetworkConnection)
     }
-    LaunchedEffect(Unit) { UI.latestVersionProfile = updateController.check() }
+    // TS localization: Android RWTS cannot install updates for the upstream RWJS package.
+    LaunchedEffect(Unit) {
+        if (!appContext.isAndroid()) UI.latestVersionProfile = updateController.check()
+    }
     LaunchedEffect(Unit) {
         coreData.lastPlayTime = System.currentTimeMillis()
         runCatching { AccountSession.restoreIfNeeded() }
@@ -239,7 +242,7 @@ fun App(
             CompositionLocalProvider(
                 LocalTextSelectionColors provides RWSelectionColors,
                 LocalWindowManager provides ConstraintWindowManager(maxWidth, maxHeight),
-                LocalUpdateCheckInProgress provides updateController.checking,
+                LocalUpdateCheckInProgress provides (!appContext.isAndroid() && updateController.checking),
             ) {
 
                 val enableAnimations = uiAnimationsEnabled()
@@ -398,7 +401,7 @@ fun App(
                         {
                             if (compareVersions(it.version, projectVersion) <= 0) return@SettingsView
                             UI.latestVersionProfile = it
-                            updateController.accept(it)
+                            if (!appContext.isAndroid()) updateController.accept(it)
                         },
                         selectedColorSchemeName,
                         { theme ->
