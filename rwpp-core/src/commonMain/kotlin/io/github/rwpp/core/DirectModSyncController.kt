@@ -61,9 +61,12 @@ class DirectResumeConnection internal constructor(private val endpoint: DirectJo
 
 private object DirectResumeStore {
     private val entries = LinkedHashMap<DirectJoinEndpoint, Pair<String, ByteArray>>()
-    @Synchronized fun observe(endpoint: DirectJoinEndpoint, instance: String) {
-        val old = entries[endpoint] ?: return
-        if (old.first != instance) { entries.remove(endpoint); old.second.fill(0) }
+    @Synchronized fun observe(endpoint: DirectJoinEndpoint, instance: String): Boolean {
+        val old = entries[endpoint] ?: return false
+        if (old.first == instance) return false
+        entries.remove(endpoint)
+        old.second.fill(0)
+        return true
     }
     @Synchronized fun put(endpoint: DirectJoinEndpoint, instance: String, secret: ByteArray) {
         entries.remove(endpoint)?.second?.fill(0)
@@ -160,7 +163,14 @@ class DirectModSyncController(
         }
 
         if (first.protocolVersion == 3) {
-            DirectResumeStore.observe(endpoint, first.serverInstance)
+            val previousInstanceReplaced = DirectResumeStore.observe(endpoint, first.serverInstance)
+            if (!first.lobby && first.serverInstance.isNotBlank() && previousInstanceReplaced) {
+                return DirectJoinSyncResult.Failed(ConnectionFailure(
+                    ConnectionFailureReason.ROOM_RESTARTED,
+                    ConnectionFailureStage.SYNC_MANIFEST,
+                    details = "Direct resume instance changed from the previous room session",
+                ))
+            }
             if (first.lobby) DirectResumeStore.revoke(endpoint)
         }
 
@@ -278,11 +288,15 @@ class DirectModSyncController(
         }
         val finalManifest = transport.getManifest()
         validateManifest(finalManifest)
-        if (finalManifest.status != "ready") throw DirectModSyncServerException(DirectModSyncErrorCode.PREPARING)
+        if (finalManifest.serverInstance.isNotBlank() && finalManifest.serverInstance != first.serverInstance) {
+            throw DirectSyncFailure(ConnectionFailure(ConnectionFailureReason.ROOM_RESTARTED, ConnectionFailureStage.SYNC_MANIFEST,
+                details = "Direct room instance changed during resume verification"))
+        }
         if (finalManifest.lobby) throw DirectSyncFailure(ConnectionFailure(
-            ConnectionFailureReason.MANIFEST_CHANGED, ConnectionFailureStage.SYNC_MANIFEST,
+            ConnectionFailureReason.ROOM_RETURNED_TO_LOBBY, ConnectionFailureStage.SYNC_MANIFEST,
             details = "Room returned to lobby during verification",
         ))
+        if (finalManifest.status != "ready") throw DirectModSyncServerException(DirectModSyncErrorCode.PREPARING)
         requireSameContent(first, finalManifest)
         if (!environment.isLoadedModSetExact(finalManifest.mods) ||
             environment.getUnitsChecksum().toLong() != finalManifest.hostUnitsChecksum) {
@@ -334,7 +348,11 @@ class DirectModSyncController(
             }
         } catch (error: TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()
-            throw java.io.IOException("Already registered, but resume grant timed out; disconnecting", lastFailure ?: error)
+            // Our grant deadline expired while the join coroutine is still active.
+            // Preserve the last transport failure, not the internal coroutine cancellation.
+            throw java.net.SocketTimeoutException("Already registered, but resume grant timed out; disconnecting").apply {
+                lastFailure?.let { initCause(it) }
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {

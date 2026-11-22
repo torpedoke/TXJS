@@ -70,6 +70,22 @@ class JoinFailureMessageTest {
     }
 
     @Test
+    fun restartedRoomHasARecoveryMessageInsteadOfModSyncFailure() {
+        loadBundle("zh")
+        val failure = ConnectionFailure(ConnectionFailureReason.ROOM_RESTARTED, ConnectionFailureStage.SYNC_MANIFEST)
+        val text = failure.localized()
+        assertEquals("房间已重启", text.title)
+        assertTrue(text.explanation.contains("重启"))
+        assertTrue(text.suggestion.contains("重新加入"))
+
+        loadBundle("en")
+        val english = failure.localized()
+        assertEquals("The room was restarted", english.title)
+        assertTrue(english.explanation.contains("restarted"))
+        assertTrue(english.suggestion.contains("join"))
+    }
+
+    @Test
     fun englishBundleAlsoFormatsTimeout() {
         loadBundle("en")
         val result = joinFailureMessage(screenshotMessage)
@@ -105,9 +121,8 @@ class JoinFailureMessageTest {
                 ConnectionFailureStage.SYNC_MANIFEST,
             ))
             val expected = when (code) {
-                DirectModSyncErrorCode.LEASE_EXPIRED, DirectModSyncErrorCode.LEASE_INVALID,
-                DirectModSyncErrorCode.NOT_READY, DirectModSyncErrorCode.RESUME_INVALID,
-                DirectModSyncErrorCode.RESUME_UNSUPPORTED -> ConnectionFailureReason.SYNC_FAILED
+                DirectModSyncErrorCode.LEASE_EXPIRED, DirectModSyncErrorCode.LEASE_INVALID -> ConnectionFailureReason.SEAT_UNAVAILABLE
+                DirectModSyncErrorCode.NOT_READY -> ConnectionFailureReason.ENTRY_NOT_READY
                 else -> ConnectionFailureReason.valueOf(code.name)
             }
             assertEquals(expected, failure.reason)
@@ -179,6 +194,8 @@ class JoinFailureMessageTest {
         val reasons = mapOf(
             ConnectionFailureStage.SYNC_MANIFEST to ConnectionFailureReason.SYNC_FAILED,
             ConnectionFailureStage.SYNC_DOWNLOAD to ConnectionFailureReason.SYNC_FAILED,
+            ConnectionFailureStage.CONFIRM_ADMISSION to ConnectionFailureReason.ADMISSION_FAILED,
+            ConnectionFailureStage.ISSUE_RESUME to ConnectionFailureReason.GRANT_FAILED,
             ConnectionFailureStage.SYNC_APPLY to ConnectionFailureReason.RELOAD_FAILED,
             ConnectionFailureStage.SYNC_RECONNECT to ConnectionFailureReason.RECONNECT_FAILED,
         )

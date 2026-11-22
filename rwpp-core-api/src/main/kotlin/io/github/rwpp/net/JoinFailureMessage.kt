@@ -8,6 +8,7 @@
 package io.github.rwpp.net
 
 import io.github.rwpp.i18n.readI18n
+import io.github.rwpp.net.sync.direct.DirectModSyncErrorCode
 import io.github.rwpp.net.sync.direct.DirectModSyncServerException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
@@ -27,7 +28,10 @@ enum class ConnectionFailureReason(val key: String) {
     MISSING_UNITS("missingUnits"), DATA_MISMATCH("dataMismatch"), SYNC_FAILED("syncFailed"),
     MANIFEST_CHANGED("manifestChanged"), CHECKSUM_MISMATCH("checksumMismatch"),
     RELOAD_FAILED("reloadFailed"), RECONNECT_FAILED("reconnectFailed"),
-    NO_ROOM("noRoom"), NOT_LOBBY("notLobby"), PREPARING("preparing"), NOT_FOUND("notFound"),
+    NO_ROOM("noRoom"), ROOM_RESTARTED("roomRestarted"), ROOM_RETURNED_TO_LOBBY("roomReturnedToLobby"),
+    NOT_LOBBY("notLobby"), PREPARING("preparing"), NOT_FOUND("notFound"),
+    RESUME_INVALID("resumeInvalid"), RESUME_UNSUPPORTED("resumeUnsupported"), SEAT_UNAVAILABLE("seatUnavailable"),
+    ENTRY_NOT_READY("entryNotReady"), ADMISSION_FAILED("admissionFailed"), GRANT_FAILED("grantFailed"),
     BUSY("busy"), BAD_REQUEST("badRequest"), INTERNAL_ERROR("internalError"),
     USERNAME_TOO_LONG("usernameTooLong"), USERNAME_TOO_SHORT("usernameTooShort"),
     BANNED("banned"), CLIENT_OUTDATED("clientOutdated"), SERVER_OUTDATED("serverOutdated"),
@@ -37,7 +41,7 @@ enum class ConnectionFailureReason(val key: String) {
     MASTER_QUERY_FAILED("masterQueryFailed"), KICKED("kicked"),
 }
 
-enum class ConnectionFailureStage { CONNECT, SYNC_MANIFEST, SYNC_DOWNLOAD, SYNC_APPLY, SYNC_RECONNECT, SERVER }
+enum class ConnectionFailureStage { CONNECT, SYNC_MANIFEST, SYNC_DOWNLOAD, SYNC_APPLY, SYNC_RECONNECT, SERVER, CONFIRM_ADMISSION, ISSUE_RESUME }
 
 data class ConnectionFailure(
     val reason: ConnectionFailureReason,
@@ -74,14 +78,14 @@ fun connectionFailure(
     if (causes.any { it is CancellationException }) return null
     val details = causes.map { it.message?.takeIf(String::isNotBlank) ?: it.javaClass.simpleName }
         .distinct().joinToString("\n")
+    if (stage == ConnectionFailureStage.CONFIRM_ADMISSION || stage == ConnectionFailureStage.ISSUE_RESUME) {
+        return ConnectionFailure(fallbackReason(stage), stage, details)
+    }
     causes.forEach { cause ->
         val reason = when (cause) {
             is DirectModSyncServerException -> when (cause.code) {
-                io.github.rwpp.net.sync.direct.DirectModSyncErrorCode.LEASE_EXPIRED,
-                io.github.rwpp.net.sync.direct.DirectModSyncErrorCode.LEASE_INVALID,
-                io.github.rwpp.net.sync.direct.DirectModSyncErrorCode.NOT_READY,
-                io.github.rwpp.net.sync.direct.DirectModSyncErrorCode.RESUME_INVALID,
-                io.github.rwpp.net.sync.direct.DirectModSyncErrorCode.RESUME_UNSUPPORTED -> ConnectionFailureReason.SYNC_FAILED
+                DirectModSyncErrorCode.LEASE_EXPIRED, DirectModSyncErrorCode.LEASE_INVALID -> ConnectionFailureReason.SEAT_UNAVAILABLE
+                DirectModSyncErrorCode.NOT_READY -> ConnectionFailureReason.ENTRY_NOT_READY
                 else -> ConnectionFailureReason.valueOf(cause.code.name)
             }
             is SocketTimeoutException, is TimeoutException -> ConnectionFailureReason.TIMEOUT
@@ -155,6 +159,8 @@ fun connectionFailure(
 
 private fun fallbackReason(stage: ConnectionFailureStage): ConnectionFailureReason = when (stage) {
     ConnectionFailureStage.CONNECT -> ConnectionFailureReason.UNKNOWN
+    ConnectionFailureStage.CONFIRM_ADMISSION -> ConnectionFailureReason.ADMISSION_FAILED
+    ConnectionFailureStage.ISSUE_RESUME -> ConnectionFailureReason.GRANT_FAILED
     ConnectionFailureStage.SERVER -> ConnectionFailureReason.SERVER_REJECTED
     ConnectionFailureStage.SYNC_APPLY -> ConnectionFailureReason.RELOAD_FAILED
     ConnectionFailureStage.SYNC_RECONNECT -> ConnectionFailureReason.RECONNECT_FAILED
