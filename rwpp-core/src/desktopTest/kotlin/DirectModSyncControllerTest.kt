@@ -170,7 +170,7 @@ class DirectModSyncControllerTest {
 
     @Test
     fun resumeVerificationCanBeRetriedAndReopenedLobbySyncsAsANewJoin() = runBlocking<Unit> {
-        val address = "localhost:6030"
+        val address = "localhost:5123"
         val lobby = manifest(emptyList()).copy(protocolVersion = 3, serverInstance = "instance-a",
             phase = "lobby", capabilities = 1, hostUnitsChecksum = 123)
         val match = lobby.copy(lobby = false, phase = "match", scope = "match-generation")
@@ -187,9 +187,11 @@ class DirectModSyncControllerTest {
         transport.manifestResults += { match }
         transport.manifestResults += { throw java.io.IOException("manifest unavailable") }
         assertIs<DirectJoinSyncResult.Failed>(subject.preJoinSync(address, LoadingContext {}))
-        repeat(2) { transport.manifestResults += { match } }
-        val resumed = assertIs<DirectJoinSyncResult.Applied>(subject.preJoinSync(address, LoadingContext {}))
-        checkNotNull(resumed.resume).clear()
+        repeat(4) { transport.manifestResults += { match } }
+        for (rejoinAddress in listOf(address, "$address/")) {
+            val resumed = assertIs<DirectJoinSyncResult.Applied>(subject.preJoinSync(rejoinAddress, LoadingContext {}))
+            checkNotNull(resumed.resume).clear()
+        }
         assertEquals(1, transport.reserveCalls)
         assertTrue(transport.downloads.isEmpty())
         assertTrue(env.applied.isEmpty())

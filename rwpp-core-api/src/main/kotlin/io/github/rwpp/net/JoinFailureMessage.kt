@@ -135,6 +135,7 @@ fun connectionFailure(
         "Incorrect password.", "Incorrect password", "Wrong password" -> ConnectionFailureReason.WRONG_PASSWORD
         "Failed to get server connection data - unknown", "Unexpected header from master server",
         "Unexpected return from master server", "Unexpected end of response", "Request missing required fields" -> ConnectionFailureReason.MASTER_QUERY_FAILED
+        "Admission denied: NOT_READY" -> ConnectionFailureReason.ENTRY_NOT_READY
         "Kicked", "Kicked by host" -> ConnectionFailureReason.KICKED
         "Missing 1 mod." -> ConnectionFailureReason.MISSING_MODS
         "Different mod data.", "Local mod set does not match direct manifest after reload" -> ConnectionFailureReason.DATA_MISMATCH

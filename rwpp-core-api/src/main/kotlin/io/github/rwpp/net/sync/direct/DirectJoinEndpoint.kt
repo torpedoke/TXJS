@@ -22,7 +22,7 @@ data class DirectJoinEndpoint(val host: String, val port: Int = DEFAULT_PORT) {
         private val IPV6 = Regex("[0-9A-Fa-f:.]+")
 
         fun parseOrNull(rawAddress: String): DirectJoinEndpoint? {
-            val address = rawAddress.trim()
+            val address = rawAddress.trim().removeSuffix("/")
             if (address.isEmpty() || address.length > 512 || address.any { it.isWhitespace() || it == '\r' || it == '\n' }) return null
             if (address.startsWith("get|", ignoreCase = true) || address.startsWith("Qnews", ignoreCase = true)) return null
             if (address.matches(Regex("[QRT][A-Za-z0-9]+", RegexOption.IGNORE_CASE))) return null

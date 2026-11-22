@@ -40,7 +40,11 @@ fun roomCodeForAddress(address: String): String? {
 
 /** 对外可加入的房间地址；T 短码只能通过指定中转域名加入。 */
 fun roomJoinAddressForId(roomId: String): String {
-    val code = roomCodeForAddress(roomId) ?: return roomId.trim()
+    val address = roomId.trim()
+    if (address.endsWith('/') && io.github.rwpp.net.sync.direct.DirectJoinEndpoint.parseOrNull(address) != null) {
+        return address.dropLast(1)
+    }
+    val code = roomCodeForAddress(address) ?: return address
     return if (code.startsWith('T')) T_ROOM_ADDRESS_PREFIX + code.drop(1) else code
 }
 
