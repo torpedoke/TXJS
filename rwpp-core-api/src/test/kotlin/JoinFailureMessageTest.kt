@@ -153,6 +153,7 @@ class JoinFailureMessageTest {
             "Kicked: Your 'Rusted Warfare' client is different to the server. Game can not be synchronized." to ConnectionFailureReason.CLIENT_INTEGRITY,
             "Kicked: Room is locked. New players cannot join this server." to ConnectionFailureReason.ROOM_LOCKED,
             "Kicked: A game has already been started on this server" to ConnectionFailureReason.GAME_STARTED,
+            "Kicked: Admission denied: NOT_READY" to ConnectionFailureReason.ENTRY_NOT_READY,
             "Kicked: No free slots on server" to ConnectionFailureReason.ROOM_FULL,
             "Missing 2 mods." to ConnectionFailureReason.MISSING_MODS,
             "Missing mod: 'example'" to ConnectionFailureReason.MISSING_MODS,

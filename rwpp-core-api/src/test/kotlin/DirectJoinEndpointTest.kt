@@ -21,6 +21,18 @@ class DirectJoinEndpointTest {
     }
 
     @Test
+    fun emptySuffixOnDirectAddressIsSharedByNativeJoinAndResume() {
+        for (address in listOf("122.228.216.165:5123", "example.com", "[::1]:6000")) {
+            assertEquals(address, io.github.rwpp.net.roomJoinAddressForId("$address/"))
+            assertEquals(DirectJoinEndpoint.parseOrNull(address), DirectJoinEndpoint.parseOrNull("$address/"))
+        }
+        for (address in listOf("host:5123//", "host:5123/room", "t.mxy.wang/1234", "Q1234/", "get|foo/")) {
+            assertNull(DirectJoinEndpoint.parseOrNull(address))
+            assertEquals(address, io.github.rwpp.net.roomJoinAddressForId(address))
+        }
+    }
+
+    @Test
     fun rejectsCommandsShortCodesAndMalformedAddresses() {
         listOf("Q77182", "rABC", "T1234", "Qnews", "get|foo", "host:", "host:0", "host:65536", "::1", "[::1", "a b:5123", "http://host").forEach {
             assertNull(DirectJoinEndpoint.parseOrNull(it), it)
