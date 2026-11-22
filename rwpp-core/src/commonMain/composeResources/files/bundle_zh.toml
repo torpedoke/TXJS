@@ -76,6 +76,38 @@ suggestion = "请确认房间仍可加入，然后重新连接。"
 title = "房间已不可用"
 explanation = "同步服务器表示当前没有可用房间。"
 suggestion = "请刷新房间列表，或向房主获取新的连接地址。"
+[connectionError.resumeInvalid]
+title = "无法恢复原对局"
+explanation = "当前连接没有可用于恢复原对局的凭证。"
+suggestion = "请返回房间列表，等房间回到大厅后重新加入。"
+[connectionError.resumeUnsupported]
+title = "当前房间不支持对局重连"
+explanation = "房间当前无法通过此连接恢复对局。"
+suggestion = "请等房间回到大厅后再加入。"
+[connectionError.seatUnavailable]
+title = "预留席位已失效"
+explanation = "服务器未接受本次加入使用的席位凭证。"
+suggestion = "请从房间列表重新加入以申请席位。"
+[connectionError.entryNotReady]
+title = "服务器尚未准备好"
+explanation = "服务器暂时无法处理本次入房请求。"
+suggestion = "请稍后重新加入。"
+[connectionError.admissionFailed]
+title = "未能确认入房席位"
+explanation = "游戏已连接，客户端未能确认服务器预留的席位。"
+suggestion = "请从房间列表重新加入。"
+[connectionError.grantFailed]
+title = "未能取得重连凭证"
+explanation = "服务器已确认入房席位，但客户端未能取得本局的重连凭证。"
+suggestion = "请从房间列表重新加入。"
+[connectionError.roomReturnedToLobby]
+title = "房间已返回大厅"
+explanation = "重连期间原对局已结束，房间现在处于大厅。"
+suggestion = "请从房间列表重新加入。"
+[connectionError.roomRestarted]
+title = "房间已重启"
+explanation = "服务器已经重启了这场对局，原来的重连凭证已失效。"
+suggestion = "请返回房间列表，重新加入可用的房间。"
 [connectionError.notLobby]
 title = "房间已不在等待阶段"
 explanation = "房间已不再接受等待阶段的模组同步。"

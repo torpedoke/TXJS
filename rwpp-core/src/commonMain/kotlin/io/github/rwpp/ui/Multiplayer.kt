@@ -85,6 +85,7 @@ import io.github.rwpp.net.hasRoomLabel
 import io.github.rwpp.net.isJoinableFromList
 import io.github.rwpp.net.isModdedRoom
 import io.github.rwpp.net.ConnectionFailure
+import io.github.rwpp.net.ConnectionFailureStage
 import io.github.rwpp.net.ConnectionFailureReason
 import io.github.rwpp.net.connectionFailure
 import io.github.rwpp.net.labels
@@ -460,14 +461,17 @@ fun MultiplayerView(
                     game.setUserName(userName)
                     configIO.setGameConfig("lastNetworkIP", address)
 
+                    var joinStage = ConnectionFailureStage.CONNECT
                     suspend fun connectAndConfirmAdmission(): Result<String> {
                         val result = game.directJoinServer(address, capturedRoomDescription?.joinRelayUuid(), this)
                         if (result.isSuccess) {
                             joined = true
                             directReservation?.let { reservation ->
                                 message(readI18n("modSync.directConfirmingSeat"))
+                                joinStage = ConnectionFailureStage.CONFIRM_ADMISSION
                                 reservation.awaitAdmission()
                                 resumeInstance?.let { instance ->
+                                    joinStage = ConnectionFailureStage.ISSUE_RESUME
                                     io.github.rwpp.core.DirectModSyncController.shared.saveResumeGrant(reservation, instance)
                                 }
                             }
@@ -487,8 +491,9 @@ fun MultiplayerView(
                     } catch (error: kotlinx.coroutines.CancellationException) {
                         throw error
                     } catch (error: Exception) {
-                        val model = connectionFailure(error, io.github.rwpp.net.ConnectionFailureStage.SYNC_MANIFEST)
+                        val model = connectionFailure(error, joinStage)
                             ?: throw error
+                        logger.warn("[JOIN] failed at stage={} reason={}", model.stage, model.reason, error)
                         failure(model)
                         return@beginSession false
                     }

@@ -76,6 +76,38 @@ suggestion = "Check whether the room is still available and join again."
 title = "The room is no longer available"
 explanation = "The sync server reports that there is no active room."
 suggestion = "Refresh the room list or ask the host for a new address."
+[connectionError.resumeInvalid]
+title = "Could not resume the previous match"
+explanation = "This connection has no valid credential for the previous match."
+suggestion = "Return to the room list and rejoin when the lobby opens."
+[connectionError.resumeUnsupported]
+title = "Match reconnect is unavailable"
+explanation = "The room cannot resume the match on this connection."
+suggestion = "Join again when the room returns to the lobby."
+[connectionError.seatUnavailable]
+title = "Reserved seat is no longer valid"
+explanation = "The server did not accept the seat reservation."
+suggestion = "Join again from the room list to request a seat."
+[connectionError.entryNotReady]
+title = "Server is not ready"
+explanation = "The server cannot process the join request yet."
+suggestion = "Wait a moment and rejoin."
+[connectionError.admissionFailed]
+title = "Could not confirm your seat"
+explanation = "The game connected, but your reserved seat could not be confirmed."
+suggestion = "Join again from the room list."
+[connectionError.grantFailed]
+title = "Could not obtain reconnect credentials"
+explanation = "Your seat was confirmed, but the client could not obtain credentials for this match."
+suggestion = "Join again from the room list."
+[connectionError.roomReturnedToLobby]
+title = "The room returned to the lobby"
+explanation = "The previous match ended during reconnect. The room is now in the lobby."
+suggestion = "Join again from the room list."
+[connectionError.roomRestarted]
+title = "The room was restarted"
+explanation = "The server restarted this game, so the previous reconnect credential is no longer valid."
+suggestion = "Return to the room list and join an available room again."
 [connectionError.notLobby]
 title = "The room is not in the lobby"
 explanation = "The room is no longer accepting lobby mod synchronization."

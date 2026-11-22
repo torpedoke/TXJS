@@ -74,6 +74,7 @@ class DirectModSyncControllerTest {
             reservation.awaitAdmission()
             val subject = controller(FakeEnvironment(), transport)
             val failure = assertFailsWith<java.io.IOException> { subject.saveResumeGrant(reservation, "instance-a") }
+            assertEquals(ConnectionFailureReason.GRANT_FAILED, io.github.rwpp.net.connectionFailure(failure, ConnectionFailureStage.ISSUE_RESUME)?.reason)
             assertTrue(failure.message.orEmpty().contains("timed out"))
             assertTrue(transport.issueCalls > 1)
             assertTrue(transport.issueScopes.all { it == "scope" })
@@ -103,6 +104,7 @@ class DirectModSyncControllerTest {
             transport.issueCalls = 0
             transport.onIssue = { delay(10_000); error("request should have timed out") }
             val failure = assertFailsWith<java.io.IOException> { subject.saveResumeGrant(reservation, "instance-a") }
+            assertEquals(ConnectionFailureReason.GRANT_FAILED, io.github.rwpp.net.connectionFailure(failure, ConnectionFailureStage.ISSUE_RESUME)?.reason)
             assertTrue(failure.message.orEmpty().contains("timed out"))
             assertEquals(1, transport.issueCalls)
         } finally { reservation.close() }
@@ -159,9 +161,55 @@ class DirectModSyncControllerTest {
         val wrongEndpoint = FakeTransport().also { it.manifestResults += { match } }
         assertIs<DirectJoinSyncResult.Failed>(controller(environment, wrongEndpoint).preJoinSync("localhost:6012", LoadingContext {}))
         val wrongInstance = FakeTransport().also { it.manifestResults += { match.copy(serverInstance = "instance-b") } }
-        assertIs<DirectJoinSyncResult.Failed>(controller(environment, wrongInstance).preJoinSync("localhost:6011", LoadingContext {}))
+        val restarted = assertIs<DirectJoinSyncResult.Failed>(controller(environment, wrongInstance).preJoinSync("localhost:6011", LoadingContext {}))
+        assertEquals(ConnectionFailureReason.ROOM_RESTARTED, restarted.failure.reason)
+        assertEquals(ConnectionFailureStage.SYNC_MANIFEST, restarted.failure.stage)
         val stale = FakeTransport().also { it.manifestResults += { match } }
         assertIs<DirectJoinSyncResult.Failed>(controller(environment, stale).preJoinSync("localhost:6011", LoadingContext {}))
+    }
+
+    @Test
+    fun resumeVerificationCanBeRetriedAndReopenedLobbySyncsAsANewJoin() = runBlocking<Unit> {
+        val address = "localhost:6030"
+        val lobby = manifest(emptyList()).copy(protocolVersion = 3, serverInstance = "instance-a",
+            phase = "lobby", capabilities = 1, hostUnitsChecksum = 123)
+        val match = lobby.copy(lobby = false, phase = "match", scope = "match-generation")
+        val transport = FakeTransport().apply {
+            repeat(3) { manifestResults += { lobby } }
+            onRenew = { lease().copy(state = "admitted") }
+        }
+        val env = FakeEnvironment().apply { loaded = true; checksum = 123 }
+        val subject = controller(env, transport)
+        val first = assertIs<DirectJoinSyncResult.Applied>(subject.preJoinSync(address, LoadingContext {}))
+        val seat = checkNotNull(first.reservation)
+        try { seat.awaitAdmission(); subject.saveResumeGrant(seat, lobby.serverInstance) } finally { seat.close() }
+
+        transport.manifestResults += { match }
+        transport.manifestResults += { throw java.io.IOException("manifest unavailable") }
+        assertIs<DirectJoinSyncResult.Failed>(subject.preJoinSync(address, LoadingContext {}))
+        repeat(2) { transport.manifestResults += { match } }
+        val resumed = assertIs<DirectJoinSyncResult.Applied>(subject.preJoinSync(address, LoadingContext {}))
+        checkNotNull(resumed.resume).clear()
+        assertEquals(1, transport.reserveCalls)
+        assertTrue(transport.downloads.isEmpty())
+        assertTrue(env.applied.isEmpty())
+
+        transport.manifestResults += { match }
+        transport.manifestResults += { lobby }
+        val ended = assertIs<DirectJoinSyncResult.Failed>(subject.preJoinSync(address, LoadingContext {}))
+        assertEquals(ConnectionFailureReason.ROOM_RETURNED_TO_LOBBY, ended.failure.reason)
+
+        val nextLobby = lobby.copy(serverInstance = "instance-b")
+        transport.manifestResults += { match }
+        transport.manifestResults += { nextLobby }
+        val changed = assertIs<DirectJoinSyncResult.Failed>(subject.preJoinSync(address, LoadingContext {}))
+        assertEquals(ConnectionFailureReason.ROOM_RESTARTED, changed.failure.reason)
+        repeat(3) { transport.manifestResults += { nextLobby } }
+        val fresh = assertIs<DirectJoinSyncResult.Applied>(subject.preJoinSync(address, LoadingContext {}))
+        checkNotNull(fresh.reservation).close()
+        assertEquals(null, fresh.resume)
+        assertEquals(nextLobby.serverInstance, fresh.resumeInstance)
+        assertEquals(2, transport.reserveCalls)
     }
 
     @Test
@@ -179,7 +227,7 @@ class DirectModSyncControllerTest {
             val transport = FakeTransport().also { repeat(2) { _ -> it.manifestResults += { value } } }
             val environment = FakeEnvironment().also { it.loaded = true; it.checksum = 123 }
             val result = assertIs<DirectJoinSyncResult.Failed>(controller(environment, transport).preJoinSync("localhost", LoadingContext {}))
-            assertEquals(ConnectionFailureReason.SYNC_FAILED, result.failure.reason)
+            assertEquals(ConnectionFailureReason.RESUME_UNSUPPORTED, result.failure.reason)
             assertEquals(0, transport.reserveCalls)
             assertTrue(transport.downloads.isEmpty())
             assertTrue(environment.applied.isEmpty())
@@ -200,11 +248,11 @@ class DirectModSyncControllerTest {
             assertTrue(environment.applied.isEmpty())
             assertFalse(environment.refreshed)
         }
-        check(value, null, false, 123, ConnectionFailureReason.SYNC_FAILED)
-        check(value, null, true, 124, ConnectionFailureReason.SYNC_FAILED)
-        check(value.copy(hostUnitsChecksum = -1), null, true, 123, ConnectionFailureReason.SYNC_FAILED)
-        check(value, value.copy(scope = "new"), true, 123, ConnectionFailureReason.SYNC_FAILED)
-        check(value, value.copy(lobby = true), true, 123, ConnectionFailureReason.SYNC_FAILED)
+        check(value, null, false, 123, ConnectionFailureReason.RESUME_UNSUPPORTED)
+        check(value, null, true, 124, ConnectionFailureReason.RESUME_UNSUPPORTED)
+        check(value.copy(hostUnitsChecksum = -1), null, true, 123, ConnectionFailureReason.RESUME_UNSUPPORTED)
+        check(value, value.copy(scope = "new"), true, 123, ConnectionFailureReason.RESUME_UNSUPPORTED)
+        check(value, value.copy(lobby = true), true, 123, ConnectionFailureReason.RESUME_UNSUPPORTED)
     }
 
     @Test
@@ -460,8 +508,8 @@ class DirectModSyncControllerTest {
             DirectModSyncErrorCode.BAD_REQUEST to ConnectionFailureReason.BAD_REQUEST,
             DirectModSyncErrorCode.INTERNAL_ERROR to ConnectionFailureReason.INTERNAL_ERROR,
             DirectModSyncErrorCode.ROOM_FULL to ConnectionFailureReason.ROOM_FULL,
-            DirectModSyncErrorCode.LEASE_EXPIRED to ConnectionFailureReason.SYNC_FAILED,
-            DirectModSyncErrorCode.LEASE_INVALID to ConnectionFailureReason.SYNC_FAILED,
+            DirectModSyncErrorCode.LEASE_EXPIRED to ConnectionFailureReason.SEAT_UNAVAILABLE,
+            DirectModSyncErrorCode.LEASE_INVALID to ConnectionFailureReason.SEAT_UNAVAILABLE,
         )
         reasons.forEach { (code, reason) ->
             val transport = FakeTransport().also {
